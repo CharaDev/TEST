@@ -1,24 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
-    <script>
-        // FirebaseConfiguration
-    const firebaseConfig = {
-        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-        appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
-    
-        // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        export { auth };
-    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auth Portal</title>
@@ -170,7 +152,6 @@
             left: 0;
         }
 
-        /* Responsive Design */
         @media (max-width: 768px) {
             .container {
                 width: 90%;
@@ -206,8 +187,8 @@
                 <div class="error-message" id="login-error"></div>
                 <form id="loginForm">
                     <div class="input-group">
-                        <input type="text" id="loginUsername" placeholder="Username" required>
-                        <i class="fas fa-user"></i>
+                        <input type="email" id="loginEmail" placeholder="Email" required>
+                        <i class="fas fa-envelope"></i>
                     </div>
                     <div class="input-group">
                         <input type="password" id="loginPassword" placeholder="Password" required>
@@ -226,8 +207,8 @@
                 <div class="error-message" id="register-error"></div>
                 <form id="registerForm">
                     <div class="input-group">
-                        <input type="text" id="registerUsername" placeholder="Username" required>
-                        <i class="fas fa-user"></i>
+                        <input type="email" id="registerEmail" placeholder="Email" required>
+                        <i class="fas fa-envelope"></i>
                     </div>
                     <div class="input-group">
                         <input type="password" id="registerPassword" placeholder="Password" required>
@@ -246,82 +227,92 @@
         </div>
     </div>
 
-    <script>
-        // Toggle between forms
+    <!-- Firebase Integration -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { 
+            getAuth, 
+            createUserWithEmailAndPassword, 
+            signInWithEmailAndPassword 
+        } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+        const firebaseConfig = {
+            apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+            authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+            projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+            storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+            messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+            appId: import.meta.env.VITE_FIREBASE_APP_ID
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // Form Toggle
         function toggleForm() {
             document.querySelector('.container').classList.toggle('active');
         }
 
-        // Handle registration
-        document.getElementById('registerForm').addEventListener('submit', function(e) {
+        // Registration Handler
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('registerUsername').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
             const password = document.getElementById('registerPassword').value.trim();
             const confirmPassword = document.getElementById('confirmPassword').value.trim();
             const errorElement = document.getElementById('register-error');
 
-            // Reset error message
             errorElement.style.display = 'none';
 
-            // Validation
+            // Basic Validation
             if (password !== confirmPassword) {
                 showError(errorElement, "Passwords do not match!");
                 return;
             }
 
-            if (password.length < 6) {
-                showError(errorElement, "Password must be at least 6 characters!");
-                return;
+            try {
+                await createUserWithEmailAndPassword(auth, email, password);
+                alert('Registration successful! Please login.');
+                toggleForm();
+                e.target.reset();
+            } catch (error) {
+                handleFirebaseError(error, errorElement);
             }
-
-            if (localStorage.getItem(username)) {
-                showError(errorElement, "Username already exists!");
-                return;
-            }
-
-            // Store user
-            localStorage.setItem(username, JSON.stringify({
-                username: username,
-                password: password
-            }));
-
-            // Clear form
-            this.reset();
-            alert('Registration successful! Please login.');
-            toggleForm();
         });
 
-        // Handle login
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+        // Login Handler
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('loginUsername').value.trim();
+            const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
             const errorElement = document.getElementById('login-error');
 
-            // Reset error message
             errorElement.style.display = 'none';
 
-            const user = JSON.parse(localStorage.getItem(username));
-
-            if (!user || user.password !== password) {
-                showError(errorElement, "Invalid username or password!");
-                return;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                alert('Login successful! Redirecting...');
+                e.target.reset();
+                // window.location.href = '/dashboard';
+            } catch (error) {
+                handleFirebaseError(error, errorElement);
             }
-
-            // Clear form
-            this.reset();
-            alert('Login successful! Redirecting...');
-            // window.location.href = '/dashboard'; // Add your redirect here
         });
 
+        // Error Handling
         function showError(element, message) {
             element.textContent = message;
             element.style.display = 'block';
         }
 
-        // Initialize localStorage if empty
-        if (!localStorage.getItem('users')) {
-            localStorage.setItem('users', JSON.stringify({}));
+        function handleFirebaseError(error, element) {
+            const errorMap = {
+                'auth/email-already-in-use': 'Email already registered',
+                'auth/invalid-email': 'Invalid email address',
+                'auth/weak-password': 'Password should be at least 6 characters',
+                'auth/user-not-found': 'User not found',
+                'auth/wrong-password': 'Incorrect password'
+            };
+            showError(element, errorMap[error.code] || error.message);
         }
     </script>
 </body>
